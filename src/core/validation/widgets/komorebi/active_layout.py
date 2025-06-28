@@ -40,6 +40,8 @@ DEFAULTS = {
         "offset_left": 0,
         "show_layout_icons": True,
     },
+    "generate_layout_icons": False,
+    "tooltip": False,
     "container_padding": {"top": 0, "left": 0, "bottom": 0, "right": 0},
     "animation": {"enabled": True, "type": "fadeInOut", "duration": 200},
     "callbacks": {"on_left": "next_layout", "on_middle": "toggle_monocle", "on_right": "prev_layout"},
@@ -107,6 +109,8 @@ VALIDATION_SCHEMA = {
         },
         "default": DEFAULTS["layout_menu"],
     },
+    "generate_layout_icons": {"type": "boolean", "default": DEFAULTS["generate_layout_icons"]},
+    "tooltip": {"type": "boolean", "default": DEFAULTS["tooltip"]},
     "container_padding": {"type": "dict", "default": DEFAULTS["container_padding"], "required": False},
     "animation": {
         "type": "dict",
