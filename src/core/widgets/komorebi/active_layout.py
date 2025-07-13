@@ -1,8 +1,10 @@
 import logging
+import os
 from collections import deque
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QCursor
+from PyQt6.QtCore import QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QCursor, QPainter
+from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from core.event_enums import KomorebiEvent
@@ -13,6 +15,7 @@ from core.utils.widgets.animation_manager import AnimationManager
 from core.utils.win32.utilities import get_monitor_hwnd
 from core.validation.widgets.komorebi.active_layout import VALIDATION_SCHEMA
 from core.widgets.base import BaseWidget
+from settings import SCRIPT_PATH
 
 try:
     from core.utils.komorebi.event_listener import KomorebiEventListener
@@ -41,7 +44,63 @@ layout_snake_case = {
     "HorizontalStack": "horizontal_stack",
     "UltrawideVerticalStack": "ultrawide_vertical_stack",
     "RightMainVerticalStack": "right_main_vertical_stack",
+    "Maximized": "maximized",
+    "Floating": "floating",
+    "Paused": "paused",
+    "Monocle": "monocle",
 }
+
+
+class LayoutIconWidget(QWidget):
+    def __init__(self, layout_name="default") -> None:
+        super().__init__()
+        self._layout_name = layout_name
+
+    def _load_svg(self):
+        icon_dir = os.path.join(SCRIPT_PATH, "assets", "icons")
+        icon_path = os.path.join(icon_dir, f"layout_{self._layout_name}.svg")
+        if os.path.exists(icon_path):
+            with open(icon_path, "r", encoding="utf-8") as svg:
+                return svg.read()
+        else:
+            logging.error(f"SVG icon for layout '{self._layout_name}' not found at {icon_path}.")
+
+    def sizeHint(self):
+        size = self.font().pixelSize()
+        return QSize(size, size)
+
+    def setAlignment(self, alignment):
+        pass
+
+    def setLayoutName(self, layout_name: str):
+        if self._layout_name != layout_name:
+            self._layout_name = layout_name
+            self._load_svg()
+            self.update()
+
+    def paintEvent(self, a0):
+        size = min(self.width(), self.height())
+        fg_color = self.palette().color(self.foregroundRole())
+        svg_content = self._load_svg()
+
+        if not svg_content:
+            logging.error(f"Failed to load SVG icon for layout '{self._layout_name}'.")
+            return
+
+        rgb = f"rgb({fg_color.red()}, {fg_color.green()}, {fg_color.blue()})"
+        svg_content = svg_content.replace("currentColor", f"{rgb}")
+        svg_renderer = QSvgRenderer(svg_content.encode("utf-8"))
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect = QRectF(
+            (self.width() - size) / 2,
+            (self.height() - size) / 2,
+            size,
+            size,
+        )
+        svg_renderer.render(painter, rect)
 
 
 class ActiveLayoutWidget(BaseWidget):
@@ -59,6 +118,8 @@ class ActiveLayoutWidget(BaseWidget):
         layouts: list[str],
         layout_icons: dict[str, str],
         layout_menu: dict[str, str],
+        generate_layout_icons: bool,
+        tooltip: bool,
         hide_if_offline: bool,
         container_padding: dict,
         animation: dict[str, str],
@@ -71,6 +132,8 @@ class ActiveLayoutWidget(BaseWidget):
         self._layout_icons = layout_icons
         self._layout_menu = layout_menu
         self._layouts_config = layouts
+        self._generate_layout_icons = generate_layout_icons
+        self._tooltip = tooltip
         self._padding = container_padding
         self._label_shadow = label_shadow
         self._container_shadow = container_shadow
@@ -83,6 +146,8 @@ class ActiveLayoutWidget(BaseWidget):
         self._focused_workspace = {}
         # Set the cursor to be a pointer when hovering over the button
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self._active_layout_icon = LayoutIconWidget()
+        self._active_layout_icon.setProperty("class", "icon")
         self._active_layout_text = QLabel()
         self._active_layout_text.setProperty("class", "label")
         self._active_layout_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -102,6 +167,8 @@ class ActiveLayoutWidget(BaseWidget):
         # Add the container to the main widget layout
         self.widget_layout.addWidget(self._widget_container)
 
+        if self._generate_layout_icons:
+            self._widget_container_layout.addWidget(self._active_layout_icon)
         self._widget_container_layout.addWidget(self._active_layout_text)
 
         self.callback_left = callbacks["on_left"]
@@ -153,7 +220,7 @@ class ActiveLayoutWidget(BaseWidget):
             item_layout.setContentsMargins(0, 0, 0, 0)
 
             if self._layout_menu["show_layout_icons"]:
-                icon_label = QLabel(icon)
+                icon_label = QLabel(icon) if isinstance(icon, str) else icon
                 icon_label.setProperty("class", "menu-item-icon")
                 icon_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
                 icon_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -170,7 +237,10 @@ class ActiveLayoutWidget(BaseWidget):
             return item
 
         for layout in self._layouts_config:
-            icon = self._layout_icons[layout]
+            if self._generate_layout_icons:
+                icon = LayoutIconWidget(layout)
+            else:
+                icon = self._layout_icons[layout]
             text = layout.replace("_", " ").title()
 
             def handler(event, l=layout):
@@ -187,11 +257,18 @@ class ActiveLayoutWidget(BaseWidget):
 
             return handler
 
-        toggle_icons = {
-            "Toggle Tiling": self._layout_icons["tiling"],
-            "Toggle Monocle": self._layout_icons["monocle"],
-            "Toggle Pause": self._layout_icons["paused"],
-        }
+        if self._generate_layout_icons:
+            toggle_icons = {
+                "Toggle Tiling": LayoutIconWidget("tiling"),
+                "Toggle Monocle": LayoutIconWidget("monocle"),
+                "Toggle Pause": LayoutIconWidget("paused"),
+            }
+        else:
+            toggle_icons = {
+                "Toggle Tiling": self._layout_icons["tiling"],
+                "Toggle Monocle": self._layout_icons["monocle"],
+                "Toggle Pause": self._layout_icons["paused"],
+            }
         toggle_actions = [
             ("Toggle Tiling", lambda: self._komorebic.toggle("tiling")),
             ("Toggle Monocle", lambda: self._komorebic.toggle("monocle")),
@@ -231,8 +308,8 @@ class ActiveLayoutWidget(BaseWidget):
         if self._is_shift_layout_allowed():
             self._layouts.rotate(1)
             self.change_layout(self._layouts[0])
-            if self._animation['enabled']:
-                AnimationManager.animate(self, self._animation['type'], self._animation['duration'])
+            if self._animation["enabled"]:
+                AnimationManager.animate(self, self._animation["type"], self._animation["duration"])
         else:
             self._toggle_blocking_state()
 
@@ -240,8 +317,8 @@ class ActiveLayoutWidget(BaseWidget):
         if self._is_shift_layout_allowed():
             self._layouts.rotate(-1)
             self.change_layout(self._layouts[0])
-            if self._animation['enabled']:
-                AnimationManager.animate(self, self._animation['type'], self._animation['duration'])
+            if self._animation["enabled"]:
+                AnimationManager.animate(self, self._animation["type"], self._animation["duration"])
         else:
             self._toggle_blocking_state()
 
@@ -254,13 +331,13 @@ class ActiveLayoutWidget(BaseWidget):
         )
 
     def _toggle_blocking_state(self):
-        if self._komorebi_state.get('is_paused', False):
+        if self._komorebi_state.get("is_paused", False):
             self._komorebic.toggle("pause")
-        elif not self._focused_workspace.get('tile', False):
+        elif not self._focused_workspace.get("tile", False):
             self._komorebic.toggle("tiling")
-        elif self._focused_workspace.get('monocle_container', None):
+        elif self._focused_workspace.get("monocle_container", None):
             self._komorebic.toggle("monocle")
-        elif self._focused_workspace.get('maximized_window', None):
+        elif self._focused_workspace.get("maximized_window", None):
             self._komorebic.toggle("maximize")
 
     def _register_signals_and_events(self):
@@ -315,12 +392,18 @@ class ActiveLayoutWidget(BaseWidget):
                     while self._layouts[0] != conn_layout_cmd:
                         self._layouts.rotate(1)
 
+                if self._generate_layout_icons:
+                    self._active_layout_icon.setLayoutName(layout_snake_case.get(layout_name, "default"))
+
                 self._active_layout_text.setText(
                     self._label.replace("{icon}", layout_icon).replace("{layout_name}", layout_name)
                 )
 
                 if self._active_layout_text.isHidden():
                     self.show()
+
+                if self._tooltip:
+                    self.setToolTip(layout_name)
         except Exception:
             logging.exception("Failed to update komorebi status and widget button state")
 
@@ -339,7 +422,7 @@ class ActiveLayoutWidget(BaseWidget):
             layout_icon = self._layout_icons["monocle"]
         else:
             layout_name = self._focused_workspace["layout"]["Default"]
-            layout_icon = self._layout_icons.get(layout_snake_case[layout_name], "unknown layout")
+            layout_icon = self._layout_icons.get(layout_snake_case[layout_name], "default")
 
         return layout_name, layout_icon
 
