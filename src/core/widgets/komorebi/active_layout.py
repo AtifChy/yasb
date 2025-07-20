@@ -15,6 +15,7 @@ from core.utils.widgets.komorebi.client import KomorebiClient
 from core.utils.win32.utilities import get_monitor_hwnd
 from core.validation.widgets.komorebi.active_layout import VALIDATION_SCHEMA
 from core.widgets.base import BaseWidget
+from core.utils.tooltip import set_tooltip
 from settings import SCRIPT_PATH
 
 try:
@@ -425,7 +426,7 @@ class ActiveLayoutWidget(BaseWidget):
                     self.show()
 
                 if self._tooltip:
-                    self.setToolTip(layout_name)
+                    set_tooltip(self, layout_name)
         except Exception:
             logging.exception("Failed to update komorebi status and widget button state")
 
