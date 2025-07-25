@@ -7,6 +7,7 @@ import psutil
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel
 
+from core.utils.tooltip import set_tooltip
 from core.utils.utilities import add_shadow, build_widget_label, refresh_widget_style
 from core.utils.widgets.animation_manager import AnimationManager
 from core.validation.widgets.yasb.battery import VALIDATION_SCHEMA
@@ -169,6 +170,12 @@ class BatteryWidget(BaseWidget):
         time_remaining = self._get_time_remaining()
         is_charging_str = "yes" if self._battery_state.power_plugged else "no"
         charging_icon = self._get_charging_icon(original_threshold)
+
+        charging_str = "charging" if is_charging_str else "discharging"
+        tooltip_text = (
+            f"Battery: {self._battery_state.percent}%\nStatus: {charging_str.title()}\nTime remaining: {time_remaining}"
+        )
+        set_tooltip(self._widget_container, tooltip_text)
 
         for part in label_parts:
             part = part.strip()
