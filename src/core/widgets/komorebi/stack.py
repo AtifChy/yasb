@@ -546,7 +546,11 @@ class StackWidget(BaseWidget):
     def _get_app_icon(self, window_index: int, ignore_cache: bool) -> QPixmap | None:
         try:
             hwnd = self._komorebi_windows[window_index]["hwnd"]
-            process = get_process_info(hwnd)
+            try:
+                process = get_process_info(hwnd)
+            except Exception:
+                logging.warning(f"Process no longer exists for HWND {hwnd}")
+                return None
             pid = process["pid"]
             self.dpi = self.screen().devicePixelRatio()
             cache_key = (hwnd, pid, self.dpi)
