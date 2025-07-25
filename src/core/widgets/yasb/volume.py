@@ -482,7 +482,7 @@ class VolumeWidget(BaseWidget):
         current_mute_status = self.volume.GetMute()
         current_volume_level = round(self.volume.GetMasterVolumeLevelScalar() * 100)
         if self._tooltip:
-            set_tooltip(self, f"Volume {current_volume_level}")
+            set_tooltip(self, f"Volume {current_volume_level}%")
         if current_mute_status == 1:
             volume_icon = self._volume_icons[0]
         elif 0 <= current_volume_level < 11:
