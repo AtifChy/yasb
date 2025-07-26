@@ -6,9 +6,7 @@ build-backend = "hatchling.build"
 name = "YASB"
 dynamic = ["version"]
 description = "Yet Another Status Bar - A highly configurable Windows status bar written in Python."
-authors = [
-    { name = "AmN" },
-]
+authors = [{ name = "AmN" }]
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">= 3.13"
@@ -72,26 +70,15 @@ packages = ["src/core"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-extend-exclude = [
-    "__pycache__",
-    ".github",
-    ".vscode",
-    "build",
-    "docs",
-    "demo"   
-]
+extend-exclude = ["__pycache__", ".github", ".vscode", "build", "docs", "demo"]
 
 [tool.ruff.lint]
-ignore = [
-    "F405",
-    "F403",
-    "E741",
-]
+ignore = ["F405", "F403", "E741"]
 select = ["I", "F"]
 fixable = ["ALL"]
 
 [tool.ruff.format]
-docstring-code-format     = true
-quote-style               = "double"
-indent-style              = "space"
+docstring-code-format = true
+quote-style = "double"
+indent-style = "space"
 skip-magic-trailing-comma = false

@@ -1,22 +1,19 @@
 import logging
-import os
 from collections import deque
 
-from PyQt6.QtCore import QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QCursor, QPainter
-from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from core.event_enums import KomorebiEvent
 from core.event_service import EventService
+from core.utils.tooltip import set_tooltip
 from core.utils.utilities import PopupWidget, add_shadow
 from core.utils.widgets.animation_manager import AnimationManager
 from core.utils.widgets.komorebi.client import KomorebiClient
 from core.utils.win32.utilities import get_monitor_hwnd
 from core.validation.widgets.komorebi.active_layout import VALIDATION_SCHEMA
 from core.widgets.base import BaseWidget
-from core.utils.tooltip import set_tooltip
-from settings import SCRIPT_PATH
 
 try:
     from core.utils.widgets.komorebi.event_listener import KomorebiEventListener
@@ -53,55 +50,159 @@ layout_snake_case = {
 
 
 class LayoutIconWidget(QWidget):
-    def __init__(self, layout_name="default") -> None:
+    def __init__(
+        self,
+        layout_name: str = "bsp",
+    ):
         super().__init__()
-        self._layout_name = layout_name
+        self.layout_name = layout_name
 
-    def _load_svg(self):
-        icon_dir = os.path.join(SCRIPT_PATH, "assets", "icons")
-        icon_path = os.path.join(icon_dir, f"layout_{self._layout_name}.svg")
-        if os.path.exists(icon_path):
-            with open(icon_path, "r", encoding="utf-8") as svg:
-                return svg.read()
-        else:
-            logging.error(f"SVG icon for layout '{self._layout_name}' not found at {icon_path}.")
+    def _get_font_size(self):
+        """Get font size with fallback for better DPI scaling"""
+        font_size = self.font().pixelSize()
+        if font_size <= 0:  # fallback if pixelSize() returns -1
+            font_size = self.font().pointSize()
+            if font_size <= 0:
+                font_size = 12
+        return font_size
 
     def sizeHint(self):
-        size = self.font().pixelSize()
-        return QSize(size, size)
+        font_size = self._get_font_size()
+        return QSize(font_size * 2, font_size * 2)
 
-    def setAlignment(self, alignment):
+    def setAlignment(self, a0):
         pass
 
     def setLayoutName(self, layout_name: str):
-        if self._layout_name != layout_name:
-            self._layout_name = layout_name
-            self._load_svg()
+        if self.layout_name != layout_name:
+            self.layout_name = layout_name
             self.update()
 
     def paintEvent(self, a0):
-        size = min(self.width(), self.height())
-        fg_color = self.palette().color(self.foregroundRole())
-        svg_content = self._load_svg()
-
-        if not svg_content:
-            logging.error(f"Failed to load SVG icon for layout '{self._layout_name}'.")
-            return
-
-        rgb = f"rgb({fg_color.red()}, {fg_color.green()}, {fg_color.blue()})"
-        svg_content = svg_content.replace("currentColor", f"{rgb}")
-        svg_renderer = QSvgRenderer(svg_content.encode("utf-8"))
-
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        rect = QRectF(
-            (self.width() - size) / 2,
-            (self.height() - size) / 2,
-            size,
-            size,
-        )
-        svg_renderer.render(painter, rect)
+        size = self._get_font_size() * 2
+
+        stroke_width = max(1.0, size * 0.08)
+
+        pen = painter.pen()
+        pen.setWidthF(stroke_width)
+        pen.setColor(self.palette().color(self.foregroundRole()))  # Ensure pen color is set
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+
+        rect = self.rect()
+        x = (rect.width() - size) / 2
+        y = (rect.height() - size) / 2
+        icon_rect = QRectF(x, y, size, size)
+
+        r = (icon_rect.width() / 2) - stroke_width
+        c = icon_rect.center()
+
+        adjusted_width = stroke_width * 0.8
+        icon_rect = icon_rect.adjusted(adjusted_width, adjusted_width, -adjusted_width, -adjusted_width)
+
+        corner_radius = icon_rect.width() * 0.1
+        painter.drawRoundedRect(icon_rect, corner_radius, corner_radius)
+
+        self._draw_icon(painter, icon_rect, r, c)
+        painter.end()
+
+    def _draw_icon(
+        self,
+        painter: QPainter,
+        icon_rect: QRectF,
+        r: float,
+        c: QPointF,
+    ):
+        # helper functions to draw lines and vectors
+        def vec(dx, dy):
+            return QPointF(dx, dy)
+
+        def line(start, end):
+            painter.drawLine(start, end)
+
+        # draw layout icons
+        if self.layout_name == "bsp":
+            line(c - vec(0, r), c + vec(0, r))
+            line(c, c + vec(r, 0))
+            line(c + vec(r / 2 + 0.15, 0.15), c + vec(r / 2 + 0.15, r))
+        elif self.layout_name == "columns":
+            line(c - vec(r / 2, r), c + vec(-r / 2, r))
+            line(c - vec(0, r), c + vec(0, r))
+            line(c - vec(-r / 2, r), c + vec(r / 2, r))
+        elif self.layout_name == "rows":
+            line(c - vec(r, r / 2), c + vec(r, -r / 2))
+            line(c - vec(r, 0), c + vec(r, 0))
+            line(c - vec(r, -r / 2), c + vec(r, r / 2))
+        elif self.layout_name == "vertical_stack":
+            line(c - vec(0, r), c + vec(0, r))
+            line(c, c + vec(r, 0))
+        elif self.layout_name == "right_main_vertical_stack":
+            line(c - vec(0, r), c + vec(0, r))
+            line(c - vec(r, 0), c)
+        elif self.layout_name == "horizontal_stack":
+            line(c - vec(r, 0), c + vec(r, 0))
+            line(c, c + vec(0, r))
+        elif self.layout_name == "ultrawide_vertical_stack":
+            line(c - vec(r / 2, r), c + vec(-r / 2, r))
+            line(c + vec(r / 2, 0), c + vec(r, 0))
+            line(c - vec(-r / 2, r), c + vec(r / 2, r))
+        elif self.layout_name == "grid":
+            line(c - vec(r, 0), c + vec(r, 0))
+            line(c - vec(0, r), c + vec(0, r))
+        elif self.layout_name == "scrolling":
+            line(c - vec(r / 2, r), c + vec(-r / 2, r))
+            line(c - vec(0, r), c + vec(0, r))
+            line(c - vec(-r / 2, r), c + vec(r / 2, r))
+        elif self.layout_name == "monocle" or self.layout_name == "maximized":
+            pass
+        elif self.layout_name == "tiling" or self.layout_name == "floating":
+            rect_left = QRectF(icon_rect)
+            rect_left.setWidth(icon_rect.width() * 0.5)
+            rect_left.setHeight(icon_rect.height() * 0.5)
+            rect_right = QRectF(rect_left)
+
+            rect_left.moveTopLeft(icon_rect.topLeft() + vec(icon_rect.width() * 0.15, icon_rect.height() * 0.15))
+            rect_right.moveTopLeft(icon_rect.topLeft() + vec(icon_rect.width() * 0.3, icon_rect.height() * 0.3))
+
+            corner_radius = icon_rect.width() * 0.08
+
+            painter.setBrush(self.palette().brush(self.foregroundRole()))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(rect_left, corner_radius, corner_radius)
+
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            pen = painter.pen()
+            pen.setStyle(Qt.PenStyle.SolidLine)
+            pen.setColor(self.palette().color(self.foregroundRole()))
+            pen.setWidthF(max(1.0, icon_rect.width() * 0.08))
+            painter.setPen(pen)
+            painter.drawRoundedRect(rect_right, corner_radius, corner_radius)
+        elif self.layout_name == "paused":
+            rect_left = QRectF(icon_rect)
+            rect_right = QRectF(rect_left)
+
+            rect_left.setWidth(icon_rect.width() * 0.25)
+            rect_left.setHeight(icon_rect.height() * 0.7)
+            rect_right.setWidth(rect_left.width())
+            rect_right.setHeight(rect_left.height())
+
+            rect_left.moveTopLeft(icon_rect.topLeft() + vec(icon_rect.width() * 0.2, icon_rect.width() * 0.15))
+            rect_right.moveTopLeft(icon_rect.topLeft() + vec(icon_rect.width() * 0.55, icon_rect.width() * 0.15))
+
+            painter.setBrush(self.palette().brush(self.foregroundRole()))
+            painter.setPen(Qt.PenStyle.NoPen)
+
+            corner_radius = icon_rect.width() * 0.08
+            painter.drawRoundedRect(rect_left, corner_radius, corner_radius)
+            painter.drawRoundedRect(rect_right, corner_radius, corner_radius)
+        else:
+            line(c - vec(0, r), c + vec(0, r))
+            line(c + vec(0, r / 2), c + vec(r, r / 2))
+            line(c - vec(0, r / 3), c - vec(r, r / 3))
 
 
 class ActiveLayoutWidget(BaseWidget):

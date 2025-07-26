@@ -87,7 +87,6 @@ build_options = {
         ("assets/sound/notification01.wav", "assets/sound/notification01.wav"),
         ("config.yaml", "config.yaml"),
         ("styles.css", "styles.css"),
-        ("assets/icons", "assets/icons"),
     ],
 }
 
